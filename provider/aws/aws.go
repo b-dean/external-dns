@@ -391,6 +391,14 @@ func (p *AWSProvider) records(ctx context.Context, zones map[string]*route53.Hos
 		}
 	}
 
+	for _, ep := range endpoints {
+		for _, z := range suitableZones(ep.DNSName, zones) {
+			if aws.StringValue(z.Name) == ep.DNSName {
+				ep.IsApex = true
+			}
+		}
+	}
+
 	return endpoints, nil
 }
 

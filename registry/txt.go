@@ -150,10 +150,10 @@ func (im *TXTRegistry) Records(ctx context.Context) ([]*endpoint.Endpoint, error
 // Once we decide to drop old format we need to drop toTXTName() and rename toNewTXTName
 func (im *TXTRegistry) generateTXTRecord(r *endpoint.Endpoint) []*endpoint.Endpoint {
 	// old TXT record format
-	txt := endpoint.NewEndpoint(im.mapper.toTXTName(r.DNSName), endpoint.RecordTypeTXT, r.Labels.Serialize(true)).WithSetIdentifier(r.SetIdentifier)
+	txt := endpoint.NewEndpoint(im.mapper.toTXTName(r.DNSName, r.IsApex), endpoint.RecordTypeTXT, r.Labels.Serialize(true)).WithSetIdentifier(r.SetIdentifier)
 	txt.ProviderSpecific = r.ProviderSpecific
 	// new TXT record format (containing record type)
-	txtNew := endpoint.NewEndpoint(im.mapper.toNewTXTName(r.DNSName, r.RecordType), endpoint.RecordTypeTXT, r.Labels.Serialize(true)).WithSetIdentifier(r.SetIdentifier)
+	txtNew := endpoint.NewEndpoint(im.mapper.toNewTXTName(r.DNSName, r.RecordType, r.IsApex), endpoint.RecordTypeTXT, r.Labels.Serialize(true)).WithSetIdentifier(r.SetIdentifier)
 	txtNew.ProviderSpecific = r.ProviderSpecific
 
 	return []*endpoint.Endpoint{txt, txtNew}
@@ -240,8 +240,8 @@ func (im *TXTRegistry) AdjustEndpoints(endpoints []*endpoint.Endpoint) []*endpoi
 
 type nameMapper interface {
 	toEndpointName(string) string
-	toTXTName(string) string
-	toNewTXTName(string, string) string
+	toTXTName(string, bool) string
+	toNewTXTName(string, string, bool) string
 }
 
 type affixNameMapper struct {
@@ -275,6 +275,12 @@ func (pr affixNameMapper) dropAffix(name string) string {
 			t = strings.ToLower(t)
 			iPrefix := strings.ReplaceAll(pr.prefix, recordTemplate, t)
 			iSuffix := strings.ReplaceAll(pr.suffix, recordTemplate, t)
+			apexPrefix := iPrefix + "apex" + iSuffix + "."
+
+			if strings.HasPrefix(name, apexPrefix) {
+				return strings.TrimPrefix(name, apexPrefix)
+			}
+
 			if pr.isPrefix() && strings.HasPrefix(name, iPrefix) {
 				return strings.TrimPrefix(name, iPrefix)
 			}
@@ -284,6 +290,13 @@ func (pr affixNameMapper) dropAffix(name string) string {
 			}
 		}
 	}
+
+	prApexPrefix := pr.prefix + "apex" + pr.suffix + "."
+
+	if strings.HasPrefix(name, prApexPrefix) {
+		return strings.TrimPrefix(name, prApexPrefix)
+	}
+
 	if strings.HasPrefix(name, pr.prefix) && pr.isPrefix() {
 		return strings.TrimPrefix(name, pr.prefix)
 	}
@@ -308,6 +321,13 @@ func (pr affixNameMapper) isSuffix() bool {
 func (pr affixNameMapper) toEndpointName(txtDNSName string) string {
 	lowerDNSName := dropRecordType(strings.ToLower(txtDNSName))
 
+	// drop apex
+	if strings.Contains(lowerDNSName, "apex") {
+		if s := pr.dropAffix(lowerDNSName); s != "" {
+			return s
+		}
+	}
+
 	// drop prefix
 	if strings.HasPrefix(lowerDNSName, pr.prefix) && pr.isPrefix() {
 		return pr.dropAffix(lowerDNSName)
@@ -321,7 +341,7 @@ func (pr affixNameMapper) toEndpointName(txtDNSName string) string {
 	return ""
 }
 
-func (pr affixNameMapper) toTXTName(endpointDNSName string) string {
+func (pr affixNameMapper) toTXTName(endpointDNSName string, isApex bool) string {
 	DNSName := strings.SplitN(endpointDNSName, ".", 2)
 
 	prefix := pr.dropAffixTemplate(pr.prefix)
@@ -334,6 +354,11 @@ func (pr affixNameMapper) toTXTName(endpointDNSName string) string {
 	if len(DNSName) < 2 {
 		return prefix + DNSName[0] + suffix
 	}
+
+	if isApex {
+		return prefix + "apex" + suffix + "." + DNSName[0] + "." + DNSName[1]
+	}
+
 	return prefix + DNSName[0] + suffix + "." + DNSName[1]
 }
 
@@ -353,7 +378,7 @@ func (pr affixNameMapper) normalizeAffixTemplate(afix, recordType string) string
 	}
 	return afix
 }
-func (pr affixNameMapper) toNewTXTName(endpointDNSName, recordType string) string {
+func (pr affixNameMapper) toNewTXTName(endpointDNSName, recordType string, isApex bool) string {
 	DNSName := strings.SplitN(endpointDNSName, ".", 2)
 	recordType = strings.ToLower(recordType)
 	recordT := recordType + "-"
@@ -367,11 +392,15 @@ func (pr affixNameMapper) toNewTXTName(endpointDNSName, recordType string) strin
 	}
 
 	if !pr.recordTypeInAffix() {
-		DNSName[0] = recordT + DNSName[0]
+		prefix = prefix + recordT
 	}
 
 	if len(DNSName) < 2 {
 		return prefix + DNSName[0] + suffix
+	}
+
+	if isApex {
+		return prefix + "apex" + suffix + "." + DNSName[0] + "." + DNSName[1]
 	}
 
 	return prefix + DNSName[0] + suffix + "." + DNSName[1]

@@ -126,7 +126,8 @@ func (im *InMemoryProvider) Records(ctx context.Context) ([]*endpoint.Endpoint, 
 
 	endpoints := make([]*endpoint.Endpoint, 0)
 
-	for zoneID := range im.Zones() {
+	zones := im.Zones()
+	for zoneID, zone := range zones {
 		records, err := im.client.Records(zoneID)
 		if err != nil {
 			return nil, err
@@ -135,6 +136,11 @@ func (im *InMemoryProvider) Records(ctx context.Context) ([]*endpoint.Endpoint, 
 		for _, record := range records {
 			ep := endpoint.NewEndpoint(record.Name, record.Type, record.Target).WithSetIdentifier(record.SetIdentifier)
 			ep.Labels = record.Labels
+
+			if record.Name == zone {
+				ep.IsApex = true
+			}
+
 			endpoints = append(endpoints, ep)
 		}
 	}

@@ -100,6 +100,8 @@ func testTXTRegistryRecordsPrefixed(t *testing.T) {
 			newEndpointWithOwner("multiple.test-zone.example.org", "\"heritage=external-dns,external-dns/owner=owner\"", endpoint.RecordTypeTXT, "").WithSetIdentifier("test-set-2"),
 			newEndpointWithOwner("*.wildcard.test-zone.example.org", "foo.loadbalancer.com", endpoint.RecordTypeCNAME, ""),
 			newEndpointWithOwner("txt.wc.wildcard.test-zone.example.org", "\"heritage=external-dns,external-dns/owner=owner\"", endpoint.RecordTypeTXT, ""),
+			newEndpointWithOwnerApex("test-zone.example.org", "1.2.3.4", endpoint.RecordTypeA, ""),
+			newEndpointWithOwner("txt.apex.test-zone.example.org", "\"heritage=external-dns,external-dns/owner=owner\"", endpoint.RecordTypeTXT, ""),
 		},
 	})
 	expectedRecords := []*endpoint.Endpoint{
@@ -180,6 +182,14 @@ func testTXTRegistryRecordsPrefixed(t *testing.T) {
 				endpoint.OwnerLabelKey: "owner",
 			},
 		},
+		{
+			DNSName:    "test-zone.example.org",
+			Targets:    endpoint.Targets{"1.2.3.4"},
+			RecordType: endpoint.RecordTypeA,
+			Labels: map[string]string{
+				endpoint.OwnerLabelKey: "owner",
+			},
+		},
 	}
 
 	r, _ := NewTXTRegistry(p, "txt.", "", "owner", time.Hour, "wc")
@@ -213,6 +223,8 @@ func testTXTRegistryRecordsSuffixed(t *testing.T) {
 			newEndpointWithOwner("multiple.test-zone.example.org", "\"heritage=external-dns,external-dns/owner=owner\"", endpoint.RecordTypeTXT, "").WithSetIdentifier("test-set-1"),
 			newEndpointWithOwner("multiple.test-zone.example.org", "lb2.loadbalancer.com", endpoint.RecordTypeCNAME, "").WithSetIdentifier("test-set-2"),
 			newEndpointWithOwner("multiple.test-zone.example.org", "\"heritage=external-dns,external-dns/owner=owner\"", endpoint.RecordTypeTXT, "").WithSetIdentifier("test-set-2"),
+			newEndpointWithOwnerApex("test-zone.example.org", "1.2.3.4", endpoint.RecordTypeA, ""),
+			newEndpointWithOwner("apex-txt.test-zone.example.org", "\"heritage=external-dns,external-dns/owner=owner\"", endpoint.RecordTypeTXT, ""),
 		},
 	})
 	expectedRecords := []*endpoint.Endpoint{
@@ -285,6 +297,14 @@ func testTXTRegistryRecordsSuffixed(t *testing.T) {
 				endpoint.OwnerLabelKey: "",
 			},
 		},
+		{
+			DNSName:    "test-zone.example.org",
+			Targets:    endpoint.Targets{"1.2.3.4"},
+			RecordType: endpoint.RecordTypeA,
+			Labels: map[string]string{
+				endpoint.OwnerLabelKey: "owner",
+			},
+		},
 	}
 
 	r, _ := NewTXTRegistry(p, "", "-txt", "owner", time.Hour, "")
@@ -314,6 +334,8 @@ func testTXTRegistryRecordsNoPrefix(t *testing.T) {
 			newEndpointWithOwner("txt.tar.test-zone.example.org", "\"heritage=external-dns,external-dns/owner=owner-2\"", endpoint.RecordTypeTXT, ""),
 			newEndpointWithOwner("foobar.test-zone.example.org", "foobar.loadbalancer.com", endpoint.RecordTypeCNAME, ""),
 			newEndpointWithOwner("foobar.test-zone.example.org", "\"heritage=external-dns,external-dns/owner=owner\"", endpoint.RecordTypeTXT, ""),
+			newEndpointWithOwnerApex("test-zone.example.org", "1.2.3.4", endpoint.RecordTypeA, ""),
+			newEndpointWithOwner("apex.test-zone.example.org", "\"heritage=external-dns,external-dns/owner=owner\"", endpoint.RecordTypeTXT, ""),
 		},
 	})
 	expectedRecords := []*endpoint.Endpoint{
@@ -362,6 +384,14 @@ func testTXTRegistryRecordsNoPrefix(t *testing.T) {
 			DNSName:    "foobar.test-zone.example.org",
 			Targets:    endpoint.Targets{"foobar.loadbalancer.com"},
 			RecordType: endpoint.RecordTypeCNAME,
+			Labels: map[string]string{
+				endpoint.OwnerLabelKey: "owner",
+			},
+		},
+		{
+			DNSName:    "test-zone.example.org",
+			Targets:    endpoint.Targets{"1.2.3.4"},
+			RecordType: endpoint.RecordTypeA,
 			Labels: map[string]string{
 				endpoint.OwnerLabelKey: "owner",
 			},
@@ -827,6 +857,14 @@ func TestCacheMethods(t *testing.T) {
 	}
 }
 
+func TestDropApex(t *testing.T) {
+	mapper := newaffixNameMapper("foo-%{record_type}-", "-bar", "")
+	aRecord := "foo-a-apex-bar.example.com"
+	expectedARecord := "example.com"
+	actualARecord := mapper.dropAffix(aRecord)
+	assert.Equal(t, expectedARecord, actualARecord)
+}
+
 func TestDropPrefix(t *testing.T) {
 	mapper := newaffixNameMapper("foo-%{record_type}-", "", "")
 	cnameRecord := "foo-cname-test.example.com"
@@ -883,6 +921,7 @@ func TestNewTXTScheme(t *testing.T) {
 		Create: []*endpoint.Endpoint{
 			newEndpointWithOwner("new-record-1.test-zone.example.org", "new-loadbalancer-1.lb.com", endpoint.RecordTypeCNAME, ""),
 			newEndpointWithOwner("example", "new-loadbalancer-1.lb.com", endpoint.RecordTypeCNAME, ""),
+			newEndpointWithOwnerApex("test-zone.example.org", "1.2.3.4", endpoint.RecordTypeA, ""),
 		},
 		Delete: []*endpoint.Endpoint{
 			newEndpointWithOwner("foobar.test-zone.example.org", "foobar.loadbalancer.com", endpoint.RecordTypeCNAME, "owner"),
@@ -902,6 +941,9 @@ func TestNewTXTScheme(t *testing.T) {
 			newEndpointWithOwner("example", "new-loadbalancer-1.lb.com", endpoint.RecordTypeCNAME, "owner"),
 			newEndpointWithOwner("example", "\"heritage=external-dns,external-dns/owner=owner\"", endpoint.RecordTypeTXT, ""),
 			newEndpointWithOwner("cname-example", "\"heritage=external-dns,external-dns/owner=owner\"", endpoint.RecordTypeTXT, ""),
+			newEndpointWithOwnerApex("test-zone.example.org", "1.2.3.4", endpoint.RecordTypeA, "owner"),
+			newEndpointWithOwner("apex.test-zone.example.org", "\"heritage=external-dns,external-dns/owner=owner\"", endpoint.RecordTypeTXT, ""),
+			newEndpointWithOwner("a-apex.test-zone.example.org", "\"heritage=external-dns,external-dns/owner=owner\"", endpoint.RecordTypeTXT, ""),
 		},
 		Delete: []*endpoint.Endpoint{
 			newEndpointWithOwner("foobar.test-zone.example.org", "foobar.loadbalancer.com", endpoint.RecordTypeCNAME, "owner"),
@@ -924,6 +966,7 @@ func TestNewTXTScheme(t *testing.T) {
 			"UpdateOld": got.UpdateOld,
 			"Delete":    got.Delete,
 		}
+
 		assert.True(t, testutils.SamePlanChanges(mGot, mExpected))
 		assert.Equal(t, nil, ctx.Value(provider.RecordsContextKey))
 	}
@@ -938,13 +981,13 @@ func TestGenerateTXT(t *testing.T) {
 			DNSName:    "foo.test-zone.example.org",
 			Targets:    endpoint.Targets{"\"heritage=external-dns,external-dns/owner=owner\""},
 			RecordType: endpoint.RecordTypeTXT,
-			Labels: map[string]string{},
+			Labels:     map[string]string{},
 		},
 		{
 			DNSName:    "cname-foo.test-zone.example.org",
 			Targets:    endpoint.Targets{"\"heritage=external-dns,external-dns/owner=owner\""},
 			RecordType: endpoint.RecordTypeTXT,
-			Labels: map[string]string{},
+			Labels:     map[string]string{},
 		},
 	}
 	p := inmemory.NewInMemoryProvider()
@@ -962,6 +1005,12 @@ helper methods
 
 func newEndpointWithOwner(dnsName, target, recordType, ownerID string) *endpoint.Endpoint {
 	return newEndpointWithOwnerAndLabels(dnsName, target, recordType, ownerID, nil)
+}
+
+func newEndpointWithOwnerApex(dnsName, target, recordType, ownerID string) *endpoint.Endpoint {
+	e := newEndpointWithOwner(dnsName, target, recordType, ownerID)
+	e.IsApex = true
+	return e
 }
 
 func newEndpointWithOwnerAndLabels(dnsName, target, recordType, ownerID string, labels endpoint.Labels) *endpoint.Endpoint {

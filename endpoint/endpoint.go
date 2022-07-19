@@ -170,6 +170,9 @@ type Endpoint struct {
 	SetIdentifier string `json:"setIdentifier,omitempty"`
 	// TTL for the record
 	RecordTTL TTL `json:"recordTTL,omitempty"`
+	// Is the record the apex of the domain
+	// +optional
+	IsApex bool `json:"isApex,omitempty"`
 	// Labels stores labels defined for the Endpoint
 	// +optional
 	Labels Labels `json:"labels,omitempty"`

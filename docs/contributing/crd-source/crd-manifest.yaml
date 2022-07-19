@@ -5,7 +5,6 @@ kind: CustomResourceDefinition
 metadata:
   annotations:
     controller-gen.kubebuilder.io/version: v0.5.0
-    api-approved.kubernetes.io: "https://github.com/kubernetes-sigs/external-dns/pull/2007"
   creationTimestamp: null
   name: dnsendpoints.externaldns.k8s.io
 spec:
@@ -39,6 +38,9 @@ spec:
                     dnsName:
                       description: The hostname of the DNS record
                       type: string
+                    isApex:
+                      description: Is the record the apex of the domain
+                      type: boolean
                     labels:
                       additionalProperties:
                         type: string
